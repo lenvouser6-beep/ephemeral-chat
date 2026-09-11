@@ -5,30 +5,190 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Ephemeral Chat</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 2rem; color: #222 }
-    code { background:#f3f4f6; padding:0.2rem 0.4rem; border-radius:4px }
-    .notice { margin-top:1rem; padding:1rem; background:#fcf8e3; border:1px solid #faebcc; border-radius:6px }
+    * { margin: 0; padding: 0; box-sizing: border-box }
+    body { 
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      height: 600px;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem;
+      border-radius: 12px 12px 0 0;
+      text-align: center;
+    }
+    .header h1 { font-size: 1.5rem; margin-bottom: 0.25rem }
+    .status { font-size: 0.85rem; opacity: 0.9 }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #f9fafb;
+    }
+    .message {
+      margin-bottom: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      max-width: 85%;
+      word-wrap: break-word;
+    }
+    .message.own {
+      background: #667eea;
+      color: white;
+      margin-left: auto;
+      text-align: right;
+    }
+    .message.other {
+      background: white;
+      border: 1px solid #e5e7eb;
+      color: #111;
+    }
+    .message-time { font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem }
+    .input-area {
+      padding: 1rem;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      gap: 0.5rem;
+    }
+    input {
+      flex: 1;
+      padding: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #667eea }
+    button {
+      padding: 0.75rem 1.5rem;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #764ba2 }
+    button:disabled { background: #ccc; cursor: not-allowed }
+    .info { font-size: 0.85rem; color: #6b7280; text-align: center; padding: 0.5rem }
   </style>
 </head>
 <body>
-  <h1>Ephemeral Chat — minimal index.html</h1>
-  <p>This repository is missing a frontend build in <code>public/</code>. I added this minimal <code>index.html</code> so the server fallback can serve a page while you deploy your app assets.</p>
-
-  <div class="notice">
-    <strong>Next steps</strong>
-    <ul>
-      <li>Place your production build files (index.html, assets, JS bundle, etc.) under <code>public/</code>.</li>
-      <li>If you use a bundler, run your build and copy the output into <code>public/</code> before deploying.</li>
-      <li>To see the WebSocket server in action, open the browser console and connect a client that speaks the chat protocol (type: "join", "msg").</li>
-    </ul>
+  <div class="container">
+    <div class="header">
+      <h1>Ephemeral Chat</h1>
+      <div class="status" id="status">Connecting...</div>
+    </div>
+    
+    <div class="messages" id="messages"></div>
+    <div class="info">Messages disappear after 5 minutes</div>
+    
+    <div class="input-area">
+      <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" />
+      <button id="sendBtn">Send</button>
+    </div>
   </div>
 
-  <h2>Quick health check</h2>
-  <p>Server fallback requested path: <code id="path">/</code></p>
-
   <script>
-    // Show the current path (helpful when Render shows the error page)
-    document.getElementById('path').textContent = location.pathname || '/';
+    const status = document.getElementById('status');
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    let ws;
+    let userId;
+    let connected = false;
+
+    function connect() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        connected = true;
+        status.textContent = '✓ Connected';
+        status.style.color = '#10b981';
+        sendBtn.disabled = false;
+        input.focus();
+        
+        // Generate a user ID and join
+        userId = `user-${Math.random().toString(36).substr(2, 9)}`;
+        ws.send(JSON.stringify({ type: 'join', user: userId }));
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          displayMessage(msg);
+        } catch (e) {
+          console.error('Failed to parse message:', e);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        status.textContent = '✗ Connection error';
+        status.style.color = '#ef4444';
+      };
+      
+      ws.onclose = () => {
+        connected = false;
+        status.textContent = 'Disconnected — reconnecting...';
+        status.style.color = '#f59e0b';
+        sendBtn.disabled = true;
+        setTimeout(connect, 3000);
+      };
+    }
+
+    function displayMessage(msg) {
+      const div = document.createElement('div');
+      div.className = `message ${msg.user === userId ? 'own' : 'other'}`;
+      
+      const text = document.createElement('div');
+      text.textContent = msg.text || msg.message || '';
+      
+      const time = document.createElement('div');
+      time.className = 'message-time';
+      time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      div.appendChild(text);
+      div.appendChild(time);
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function sendMessage() {
+      const text = input.value.trim();
+      if (!text || !connected) return;
+      
+      ws.send(JSON.stringify({ type: 'msg', user: userId, text }));
+      input.value = '';
+      input.focus();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    connect();
   </script>
 </body>
 </html>
