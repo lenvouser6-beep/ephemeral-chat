@@ -1,0 +1,13 @@
+{
+  "name": "ephemeral-chat",
+  "version": "1.0.0",
+  "description": "Lightweight messaging app — messages vanish after 5 minutes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  }
+}
