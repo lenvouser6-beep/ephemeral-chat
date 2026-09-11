@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const app = express();
@@ -22,8 +23,60 @@ const COLORS = [
 ];
 let colorIdx = 0;
 
-// ── Serve static files ────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
+// ── Debug helpers ─────────────────────────────────────────────────
+function dbg(...args) {
+  if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+    console.debug('[debug]', ...args);
+  }
+}
+
+function logRequest(req) {
+  console.log(`${new Date().toISOString()}  ${req.method} ${req.path}`);
+}
+
+// ── Serve static files with explicit fallback and debug logging ────
+const publicDir = path.join(__dirname, 'public');
+const staticMiddleware = express.static(publicDir);
+
+// Log all requests
+app.use((req, res, next) => {
+  logRequest(req);
+  next();
+});
+
+// Use static middleware but detect "misses" so we can fallback to index.html
+app.use((req, res, next) => {
+  staticMiddleware(req, res, (err) => {
+    if (err) return next(err);
+    // static didn't handle the request (miss)
+    dbg(`static miss -> ${req.path}`);
+    next();
+  });
+});
+
+// Explicit fallback for single-page apps or unmatched routes
+app.get('*', (req, res) => {
+  const reqPath = req.path;
+  const indexPath = path.join(publicDir, 'index.html');
+
+  // If index.html exists, serve it and log; otherwise render a helpful error page
+  fs.access(indexPath, fs.constants.R_OK, (err) => {
+    if (err) {
+      console.error(`index.html not found when trying to serve ${reqPath}:`, err);
+      res.status(500).send(`<!doctype html><html><head><title>Server error</title></head><body><h1>500 — index.html missing</h1><p>Requested path: <code>${reqPath}</code></p><p>Looked for: <code>${indexPath}</code></p><pre>${String(err)}</pre></body></html>`);
+      return;
+    }
+
+    res.sendFile(indexPath, (sendErr) => {
+      if (sendErr) {
+        console.error(`Failed to send index.html for ${reqPath}:`, sendErr);
+        res.status(500).send(`<!doctype html><html><head><title>Server error</title></head><body><h1>500 — Failed to send index.html</h1><p>Requested path: <code>${reqPath}</code></p><pre>${String(sendErr)}</pre></body></html>`);
+      } else {
+        dbg(`Served index.html for ${reqPath}`);
+      }
+    });
+  });
+});
 
 // ── Broadcast helper ───────────────────────────────────────────────
 function broadcast(data, exclude) {
@@ -47,10 +100,11 @@ function scheduleExpiry(id) {
 // ── WebSocket handling ─────────────────────────────────────────────
 wss.on('connection', ws => {
   const color = COLORS[colorIdx++ % COLORS.length];
+  console.log('New websocket connection — assigned color', color);
 
   ws.on('message', raw => {
     let data;
-    try { data = JSON.parse(raw); } catch { return; }
+    try { data = JSON.parse(raw); } catch (e) { dbg('Invalid JSON from ws:', raw); return; }
 
     // ── Join ───────────────────────────────────────────────────────
     if (data.type === 'join') {
@@ -108,6 +162,11 @@ wss.on('connection', ws => {
         text: `${user.name} left the chat`,
       });
     }
+    console.log('Websocket closed — remaining users:', users.size);
+  });
+
+  ws.on('error', (err) => {
+    console.error('Websocket error:', err);
   });
 });
 
