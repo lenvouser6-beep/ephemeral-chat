@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ephemeral Chat</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 2rem; color: #222 }
+    code { background:#f3f4f6; padding:0.2rem 0.4rem; border-radius:4px }
+    .notice { margin-top:1rem; padding:1rem; background:#fcf8e3; border:1px solid #faebcc; border-radius:6px }
+  </style>
+</head>
+<body>
+  <h1>Ephemeral Chat — minimal index.html</h1>
+  <p>This repository is missing a frontend build in <code>public/</code>. I added this minimal <code>index.html</code> so the server fallback can serve a page while you deploy your app assets.</p>
+
+  <div class="notice">
+    <strong>Next steps</strong>
+    <ul>
+      <li>Place your production build files (index.html, assets, JS bundle, etc.) under <code>public/</code>.</li>
+      <li>If you use a bundler, run your build and copy the output into <code>public/</code> before deploying.</li>
+      <li>To see the WebSocket server in action, open the browser console and connect a client that speaks the chat protocol (type: "join", "msg").</li>
+    </ul>
+  </div>
+
+  <h2>Quick health check</h2>
+  <p>Server fallback requested path: <code id="path">/</code></p>
+
+  <script>
+    // Show the current path (helpful when Render shows the error page)
+    document.getElementById('path').textContent = location.pathname || '/';
+  </script>
+</body>
+</html>
